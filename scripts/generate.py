@@ -115,7 +115,7 @@ def page(title, body):
 """
 
 def nav(parts):
-    out = [f'<div class="breadcrumbs"><a href="{SITE_ROOT}/index.html">📦 Cosmos Cloud releases</a>']
+    out = [f'<div class="breadcrumbs"><a href="{A("index.html")}">📦 Cosmos Cloud releases</a>']
     for label, href in parts:
         if href:
             out.append(f' / <a href="{h(href)}">{h(label)}</a>')
@@ -128,6 +128,12 @@ def abspath(*parts):
     """Absolute site path (rooted at the Pages base URL)."""
     return SITE_ROOT + '/' + '/'.join(str(p) for p in parts)
 
+PREFIX = ''   # e.g. 'latest/' when rendering the latest/ subtree
+
+def A(*parts):
+    """Absolute path honouring the current PREFIX."""
+    return SITE_ROOT + '/' + PREFIX + '/'.join(str(p) for p in parts)
+
 def placeholder():
     body = nav([]) + ('<h1>Cosmos Cloud — OpenWrt releases</h1>'
                       '<p class="muted">No mirrored releases yet. The index will appear here once releases are mirrored '
@@ -137,12 +143,16 @@ def placeholder():
     write('sitemap.xml', sitemap_root([]))
     print('No releases — wrote placeholder.')
 
-def sitemap_root(releases):
+def sitemap_root(releases, latest_by_ow=None):
     urls = ['<url><loc>https://aseracorp.github.io/cosmos-owrt-releases/</loc></url>',
             '<url><loc>https://aseracorp.github.io/cosmos-owrt-releases/latest/</loc></url>']
     for r in releases:
         urls.append(f'<url><loc>https://aseracorp.github.io/cosmos-owrt-releases/{h(r["ow"])}/</loc></url>')
         urls.append(f'<url><loc>https://aseracorp.github.io/cosmos-owrt-releases/{h(r["ow"])}/{h(r["co"])}/files/</loc></url>')
+    if latest_by_ow:
+        for ow, lat in latest_by_ow.items():
+            urls.append(f'<url><loc>https://aseracorp.github.io/cosmos-owrt-releases/latest/{h(ow)}/</loc></url>')
+            urls.append(f'<url><loc>https://aseracorp.github.io/cosmos-owrt-releases/latest/{h(ow)}/{h(lat["co"])}/files/</loc></url>')
     return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + '\n'.join(urls) + '\n</urlset>\n'
 
 def render_root(releases, latest_all, latest_by_ow):
@@ -172,7 +182,7 @@ def render_root(releases, latest_all, latest_by_ow):
     body.append('<h2>By OpenWrt version</h2><table><tr><th>OpenWrt</th><th></th></tr>' + ''.join(rows) + '</table>')
     body.append(f'<p class="muted">{len(releases)} release(s) indexed.</p>')
     write('index.html', page('Cosmos Cloud — OpenWrt releases', '\n'.join(body)))
-    write('sitemap.xml', sitemap_root(releases))
+    write('sitemap.xml', sitemap_root(releases, latest_by_ow))
 
 def render_latest_root(latest_all, latest_by_ow):
     if not latest_all:
@@ -195,12 +205,12 @@ def render_ow(ow, releases, latest_by_ow):
     rows = []
     for r in rels:
         is_latest = (latest_by_ow.get(ow) or {}).get('id') == r['id']
-        link = f'<a href="{h(r["co"])}/files/">download</a>' if is_latest else '<span class="muted">history</span>'
+        link = f'<a href="{A(ow, r["co"], "files")}/">download</a>' if is_latest else '<span class="muted">history</span>'
         flag = '<span class="tag latest-tag">latest</span>' if is_latest else ('<span class="tag pre-tag">pre</span>' if r['pre'] else '')
         rows.append(f'<tr><td>Cosmos Cloud <b>{h(r["co"])}</b> {flag}</td><td>{h(r["name"])}</td><td>{link}</td></tr>')
     body = [nav([(ow, None)]), f'<h1>OpenWrt {h(ow)}</h1>',
             '<table><tr><th>Cosmos Cloud version</th><th>Release</th><th>Files</th></tr>' + ''.join(rows) + '</table>']
-    write(f'{ow}/index.html', page(f'OpenWrt {ow}', '\n'.join(body)))
+    write(f'{PREFIX}{ow}/index.html', page(f'OpenWrt {ow}', '\n'.join(body)))
 
 def render_cosmos(ow, co, rels):
     if not rels: return
@@ -209,15 +219,15 @@ def render_cosmos(ow, co, rels):
     for r in rels:
         is_latest = r['id'] == latest['id']
         d = datetime.fromisoformat(r['published'].replace('Z','+00:00'))
-        link = '<a href="files/" class="link">download</a>' if is_latest else '<span class="muted">history</span>'
-        tag = f'<a href="{h(r["co"])}/files/">{h(r["tag"])}</a>' if is_latest else f'<span class="muted">{h(r["tag"])}</span>'
+        link = f'<a href="{A(ow, co, "files")}/" class="link">download</a>' if is_latest else '<span class="muted">history</span>'
+        tag = f'<a href="{A(ow, co, "files")}/">{h(r["tag"])}</a>' if is_latest else f'<span class="muted">{h(r["tag"])}</span>'
         rows.append(f'<tr><td>{tag}</td>'
                     f'<td class="muted">{d.strftime("%Y-%m-%d")}</td>'
                     f'<td>{r["n"]} files</td><td>{link}</td></tr>')
-    body = [nav([(ow, f"../{ow}/index.html"), (co, None)]),
+    body = [nav([(ow, f"{A(ow)}/index.html"), (co, None)]),
             f'<h1>Cosmos Cloud {h(co)} <span class="muted">· OpenWrt {h(ow)}</span></h1>',
             '<table><tr><th>Tag</th><th>Published</th><th>Files</th><th></th></tr>' + ''.join(rows) + '</table>']
-    write(f'{ow}/{co}/index.html', page(f'Cosmos Cloud {co} — OpenWrt {ow}', '\n'.join(body)))
+    write(f'{PREFIX}{ow}/{co}/index.html', page(f'Cosmos Cloud {co} — OpenWrt {ow}', '\n'.join(body)))
 
 def render_files(ow, co, rels, latest_all, latest_by_ow):
     if not rels: return
@@ -232,14 +242,14 @@ def render_files(ow, co, rels, latest_all, latest_by_ow):
     rows = []
     for f in sorted(latest['files'], key=lambda f: size_sort_key(f['name'])):
         rows.append(f'<tr><td><a href="{h(f["url"])}" download>{h(f["name"])}</a></td><td class="size">{h(f["size"])}</td></tr>')
-    body = [nav([(ow, f"../{ow}/index.html"), (co, f"../{co}/index.html"), ('files', None)]),
+    body = [nav([(ow, f"{A(ow)}/index.html"), (co, f"{A(ow, co)}/index.html"), ('files', None)]),
             f'<h1>📥 Files — Cosmos Cloud {h(co)} · OpenWrt {h(ow)}</h1>',
             f'<p class="muted">Release: <b>{h(latest["name"])}</b> · tag <code>{h(latest["tag"])}</code></p>'
             + ('<p>' + ' '.join(flags) + '</p>' if flags else ''),
             f'<p>Download from GitHub Releases ({h(latest["n"])} files).</p>'
             + '<table>' + ''.join(rows) + '</table>',
-            '<p class="back"><a href="../../index.html">← back</a></p>']
-    write(f'{ow}/{co}/files/index.html', page(f'Files — Cosmos Cloud {co} · OpenWrt {ow}', '\n'.join(body)))
+            f'<p class="back"><a href="{A("index.html")}">← back</a></p>']
+    write(f'{PREFIX}{ow}/{co}/files/index.html', page(f'Files — Cosmos Cloud {co} · OpenWrt {ow}', '\n'.join(body)))
 
 def write(rel, content):
     path = os.path.join(ROOT, rel)
@@ -298,7 +308,9 @@ def main():
         if r['ow'] not in latest_by_ow or (vkey(r['co']), r['id']) > (vkey(latest_by_ow[r['ow']]['co']), latest_by_ow[r['ow']]['id']):
             latest_by_ow[r['ow']] = r
 
+    global PREFIX
     print(f'{len(data)} releases parsed')
+    PREFIX = ''
     render_root(data, latest_all, latest_by_ow)
     render_latest_root(latest_all, latest_by_ow)
     for ow in sorted({r['ow'] for r in data if r['ow']}):
@@ -308,6 +320,16 @@ def main():
             combo = [r for r in ow_rel if r['co'] == co]
             render_cosmos(ow, co, combo)
             render_files(ow, co, combo, latest_all, latest_by_ow)
+    # latest/ subtree: mirror per-OpenWrt latest pages under latest/
+    PREFIX = 'latest/'
+    for ow, lat in latest_by_ow.items():
+        ow_lat = [r for r in data if r['ow'] == ow and r['id'] == lat['id']]
+        render_ow(ow, ow_lat, latest_by_ow)
+        for co in sorted({r['co'] for r in ow_lat}, key=vkey, reverse=True):
+            combo = [r for r in ow_lat if r['co'] == co]
+            render_cosmos(ow, co, combo)
+            render_files(ow, co, combo, latest_all, latest_by_ow)
+    PREFIX = ''
     print('done.')
 
 if __name__ == '__main__':
