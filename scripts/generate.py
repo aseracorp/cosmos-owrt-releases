@@ -105,6 +105,14 @@ def nav(parts):
     out.append('</div>')
     return '\n'.join(out)
 
+def placeholder():
+    body = nav([]) + ('<h1>Cosmos Cloud — OpenWrt releases</h1>'
+                      '<p class="muted">No mirrored releases yet. The index will appear here once releases are mirrored '
+                      'from <a href="https://github.com/aseracorp/cosmos-owrt">aseracorp/cosmos-owrt</a>.</p>')
+    write('index.html', page('Cosmos Cloud — OpenWrt releases', body))
+    write('latest/index.html', page('Latest release', nav([('latest/', None)]) + '<h1>Latest</h1><p class="muted">No releases yet.</p>'))
+    print('No releases — wrote placeholder.')
+
 def render_root(releases, latest_all, latest_by_ow):
     ow = sorted({r['ow'] for r in releases if r['ow']})
     rows = []
@@ -169,7 +177,8 @@ def render_cosmos(ow, co, rels):
         is_latest = r['id'] == latest['id']
         d = datetime.fromisoformat(r['published'].replace('Z','+00:00'))
         link = '<a href="files/" class="link">download</a>' if is_latest else '<span class="muted">history</span>'
-        rows.append(f'<tr><td><a href="{h(r["tag"])}/">{h(r["tag"])}</a></td>'
+        tag = f'<a href="{h(r["tag"])}/">{h(r["tag"])}</a>' if is_latest else f'<span class="muted">{h(r["tag"])}</span>'
+        rows.append(f'<tr><td>{tag}</td>'
                     f'<td class="muted">{d.strftime("%Y-%m-%d")}</td>'
                     f'<td>{r["n"]} files</td><td>{link}</td></tr>')
     body = [nav([(ow, f"../{ow}/index.html"), (co, None)]),
@@ -227,7 +236,7 @@ def main():
         if len(batch) < 100: break
         page += 1
     if not releases:
-        print('No releases found in source repo — nothing to generate.')
+        placeholder()
         return
 
     data = []
