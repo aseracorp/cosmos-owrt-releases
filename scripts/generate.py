@@ -13,7 +13,8 @@ Structure:
     index.html                        root listing
 
 Only the LATEST release of each <openwrt>/<cosmos> combo gets download
-links; older replicates are listed without links.
+links; older replicates are listed without links. Files are presented
+directly on the OpenWrt / Cosmos version pages (no intermediate stub).
 
 Usage:
     generate.py --source aseracorp/cosmos-owrt-releases [--root site] [--token ...]
@@ -195,7 +196,7 @@ def render_latest_root(latest_all, latest_by_ow):
     body = [nav([('latest/', None)]),
             '<h1>📌 Latest</h1>',
             f'<p class="muted">Latest Cosmos Cloud overall: <b>{h(latest_all["co"])}</b> / OpenWrt <b>{h(latest_all["ow"])}</b> — '
-            f'<a href="{abspath(latest_all["ow"], latest_all["co"], "files")}/">downloads</a></p>',
+            f'<a href="{abspath(latest_all["ow"], latest_all["co"])}/index.html">open downloads</a></p>',
             '<h2>Per OpenWrt version</h2><table><tr><th>OpenWrt</th><th>Latest Cosmos Cloud</th><th>Release</th></tr>' + ''.join(rows) + '</table>']
     write('latest/index.html', page('Latest release', '\n'.join(body)))
 
@@ -205,11 +206,15 @@ def render_ow(ow, releases, latest_by_ow):
     rows = []
     for r in rels:
         is_latest = (latest_by_ow.get(ow) or {}).get('id') == r['id']
-        link = f'<a href="{A(ow, r["co"], "files")}/">download</a>' if is_latest else '<span class="muted">history</span>'
         flag = '<span class="tag latest-tag">latest</span>' if is_latest else ('<span class="tag pre-tag">pre</span>' if r['pre'] else '')
-        rows.append(f'<tr><td>Cosmos Cloud <b>{h(r["co"])}</b> {flag}</td><td>{h(r["name"])}</td><td>{link}</td></tr>')
+        rows.append(f'<tr><td>Cosmos Cloud <b>{h(r["co"])}</b> {flag}</td><td>{h(r["name"])}</td></tr>')
     body = [nav([(ow, None)]), f'<h1>OpenWrt {h(ow)}</h1>',
-            '<table><tr><th>Cosmos Cloud version</th><th>Release</th><th>Files</th></tr>' + ''.join(rows) + '</table>']
+            '<table><tr><th>Cosmos Cloud version</th><th>Release</th></tr>' + ''.join(rows) + '</table>']
+    if rels:
+        latest = rels[0]
+        body.append(f'<h2>Files — Cosmos Cloud {h(latest["co"])} · {h(ow)}</h2>')
+        body.append(file_table(latest))
+        body.append(f'<p class="muted"><a href="{A("index.html")}">← back</a></p>')
     write(f'{PREFIX}{ow}/index.html', page(f'OpenWrt {ow}', '\n'.join(body)))
 
 def render_cosmos(ow, co, rels):
@@ -217,17 +222,26 @@ def render_cosmos(ow, co, rels):
     latest = rels[0]
     rows = []
     for r in rels:
-        is_latest = r['id'] == latest['id']
         d = datetime.fromisoformat(r['published'].replace('Z','+00:00'))
-        link = f'<a href="{A(ow, co, "files")}/" class="link">download</a>' if is_latest else '<span class="muted">history</span>'
-        tag = f'<a href="{A(ow, co, "files")}/">{h(r["tag"])}</a>' if is_latest else f'<span class="muted">{h(r["tag"])}</span>'
-        rows.append(f'<tr><td>{tag}</td>'
+        rows.append(f'<tr><td class="muted">{h(r["tag"])}</td>'
                     f'<td class="muted">{d.strftime("%Y-%m-%d")}</td>'
-                    f'<td>{r["n"]} files</td><td>{link}</td></tr>')
+                    f'<td>{r["n"]} files</td></tr>')
     body = [nav([(ow, f"{A(ow)}/index.html"), (co, None)]),
             f'<h1>Cosmos Cloud {h(co)} <span class="muted">· OpenWrt {h(ow)}</span></h1>',
-            '<table><tr><th>Tag</th><th>Published</th><th>Files</th><th></th></tr>' + ''.join(rows) + '</table>']
+            '<table><tr><th>Tag</th><th>Published</th><th>Files</th></tr>' + ''.join(rows) + '</table>']
+    body.append(f'<h2>Files — {h(co)} · {h(ow)}</h2>')
+    body.append(file_table(latest))
+    body.append(f'<p class="back"><a href="{A(ow)}/index.html">← back</a></p>')
     write(f'{PREFIX}{ow}/{co}/index.html', page(f'Cosmos Cloud {co} — OpenWrt {ow}', '\n'.join(body)))
+
+def file_table(rel):
+    """Direct download links, no stub page."""
+    if not rel.get('files'):
+        return '<p class="muted">No files.</p>'
+    rows = []
+    for f in sorted(rel['files'], key=lambda f: size_sort_key(f['name'])):
+        rows.append(f'<tr><td><a href="{h(f["url"])}" download>{h(f["name"])}</a></td><td class="size">{h(f["size"])}</td></tr>')
+    return '<table><tr><th>File</th><th>Size</th></tr>' + ''.join(rows) + '</table>'
 
 def render_files(ow, co, rels, latest_all, latest_by_ow):
     if not rels: return
@@ -239,15 +253,12 @@ def render_files(ow, co, rels, latest_all, latest_by_ow):
         flags.append('<span class="tag latest-tag">latest</span>')
     if latest['pre']:
         flags.append('<span class="tag pre-tag">pre-release</span>')
-    rows = []
-    for f in sorted(latest['files'], key=lambda f: size_sort_key(f['name'])):
-        rows.append(f'<tr><td><a href="{h(f["url"])}" download>{h(f["name"])}</a></td><td class="size">{h(f["size"])}</td></tr>')
     body = [nav([(ow, f"{A(ow)}/index.html"), (co, f"{A(ow, co)}/index.html"), ('files', None)]),
             f'<h1>📥 Files — Cosmos Cloud {h(co)} · OpenWrt {h(ow)}</h1>',
             f'<p class="muted">Release: <b>{h(latest["name"])}</b> · tag <code>{h(latest["tag"])}</code></p>'
             + ('<p>' + ' '.join(flags) + '</p>' if flags else ''),
-            f'<p>Download from GitHub Releases ({h(latest["n"])} files).</p>'
-            + '<table>' + ''.join(rows) + '</table>',
+            '<p>Files are served directly from GitHub Releases — click a filename to download.</p>'
+            + file_table(latest),
             f'<p class="back"><a href="{A("index.html")}">← back</a></p>']
     write(f'{PREFIX}{ow}/{co}/files/index.html', page(f'Files — Cosmos Cloud {co} · OpenWrt {ow}', '\n'.join(body)))
 
