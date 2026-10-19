@@ -13,14 +13,13 @@ Structure:
     index.html                        root listing
 
 Only the LATEST release of each <openwrt>/<cosmos> combo gets download
-links; older replicates are listed without links (the mirror workflow in
-the source repo keeps release history in sync).
+links; older replicates are listed without links.
 
 Usage:
-    generate.py --source aseracorp/cosmos-owrt-releases [--repo ...] [--branch main] [--root .]
+    generate.py --source aseracorp/cosmos-owrt-releases [--root site] [--token ...]
 """
-import argparse, html, json, os, re, sys, urllib.request
-from datetime import datetime, timezone
+import argparse, html, json, os, re, urllib.request
+from datetime import datetime
 
 def api_get(url, headers):
     req = urllib.request.Request(url, headers=headers)
@@ -55,6 +54,7 @@ def human(n):
     return f"{n:.1f} PB"
 
 def size_sort_key(fn):
+    # checksum/signature files at the end
     return (fn.lower().endswith('.sha256') or fn.endswith('.sig'))
 
 def h(text): return html.escape(str(text), quote=True)
@@ -84,12 +84,7 @@ table {{ border-collapse: collapse; width: 100%; margin: 1rem 0; }}
 th, td {{ text-align: left; padding: .45rem .6rem; border-bottom: 1px solid #d8dee4; }} body.dark th, body.dark td {{ border-color:#30363d; }}
 th {{ font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: #59636e; }} body.dark th {{ color:#9198a1; }}
 .size {{ text-align: right; white-space: nowrap; color: #59636e; font-variant-numeric: tabular-nums; }} body.dark .size {{ color:#9198a1; }}
-.checksum {{ color: #59636e; font-size: .8rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }} body.dark .checksum {{ color:#9198a1; }}
 .muted {{ color: #59636e; }} body.dark .muted {{ color:#9198a1; }}
-.tree {{ list-style: none; padding-left: 0; }}
-.tree li {{ margin: .2rem 0; }}
-.dir::before {{ content: "📁 "; }}
-.link::before {{ content: "🔗 "; }}
 .back {{ display:inline-block; margin: .5rem 0 1rem; font-size: .9rem; }}
 footer {{ margin-top: 3rem; font-size: .8rem; color: #59636e; }} body.dark footer {{ color:#9198a1; }}
 </style>
@@ -101,7 +96,6 @@ footer {{ margin-top: 3rem; font-size: .8rem; color: #59636e; }} body.dark foote
 """
 
 def nav(parts):
-    # parts: list of (label, href) with href None for current page
     out = ['<div class="breadcrumbs"><a href="index.html">📦 Cosmos Cloud releases</a>']
     for label, href in parts:
         if href:
@@ -110,12 +104,6 @@ def nav(parts):
             out.append(f' / <b>{h(label)}</b>')
     out.append('</div>')
     return '\n'.join(out)
-
-def latest_of(releases, ow, latest_by_ow):
-    """Return True if this release's (ow, cosmos) is the newest cosmos for ow."""
-    if not ow: return False
-    top = latest_by_ow.get(ow)
-    return top is not None and releases['id'] == top['id']
 
 def render_root(releases, latest_all, latest_by_ow):
     ow = sorted({r['ow'] for r in releases if r['ow']})
@@ -128,15 +116,13 @@ def render_root(releases, latest_all, latest_by_ow):
         stable = any(not r['pre'] for r in rels)
         badge = latest_flag + ('<span class="tag stable-tag">stable</span>' if stable else '')
         rows.append(f'<tr><td><a href="{h(v_ow)}/index.html">{h(v_ow)}</a> {badge}</td></tr>')
-    latest = latest_all['id'] if latest_all else None
     latest_row = ''
-    if latest:
-        lat = next((r for r in releases if r['id'] == latest), None)
-        if lat:
-            latest_row = (f'<tr><td><a href="latest/index.html"><code>latest/</code></a> '
-                          f'<span class="tag latest-tag">latest</span> '
-                          f'— Cosmos {h(lat["co"])} / OpenWrt {h(lat["ow"])} '
-                          f'({h(lat["name"])})</td></tr>')
+    if latest_all:
+        lat = latest_all
+        latest_row = (f'<tr><td><a href="latest/index.html"><code>latest/</code></a> '
+                      f'<span class="tag latest-tag">latest</span> '
+                      f'— Cosmos {h(lat["co"])} / OpenWrt {h(lat["ow"])} '
+                      f'({h(lat["name"])})</td></tr>')
     body = [nav([]), '<h1>Cosmos Cloud — OpenWrt releases</h1>',
             '<p class="muted">Download index generated automatically from GitHub Releases. No binaries are stored in this repository — all files are served from GitHub Release assets.</p>']
     if latest_row:
@@ -147,9 +133,9 @@ def render_root(releases, latest_all, latest_by_ow):
     body.append(f'<p class="muted">{len(releases)} release(s) indexed.</p>')
     write('index.html', page('Cosmos Cloud — OpenWrt releases', '\n'.join(body)))
 
-def render_latest_root(latest_all, latest_by_ow, releases):
+def render_latest_root(latest_all, latest_by_ow):
     if not latest_all:
-        write('latest/index.html', page('Latest', nav([('latest/', None)]) + '<h1>Latest</h1><p class="muted">No releases yet.</p>'))
+        write('latest/index.html', page('Latest release', nav([('latest/', None)]) + '<h1>Latest</h1><p class="muted">No releases yet.</p>'))
         return
     rows = []
     for v_ow, lat in sorted(latest_by_ow.items()):
@@ -157,57 +143,52 @@ def render_latest_root(latest_all, latest_by_ow, releases):
                     f'<td>Cosmos {h(lat["co"])}</td><td>{h(lat["name"])}</td></tr>')
     body = [nav([('latest/', None)]),
             '<h1>📌 Latest</h1>',
-            f'<p class="muted">Latest Cosmos overall: <b>{h(latest_all["co"])}</b> / OpenWrt <b>{h(latest_all["ow"])}</b> — <a href="{h(latest_all["ow"])}/{h(latest_all["co"])}/files/">downloads</a></p>',
+            f'<p class="muted">Latest Cosmos overall: <b>{h(latest_all["co"])}</b> / OpenWrt <b>{h(latest_all["ow"])}</b> — '
+            f'<a href="{h(latest_all["ow"])}/{h(latest_all["co"])}/files/">downloads</a></p>',
             '<h2>Per OpenWrt version</h2><table><tr><th>OpenWrt</th><th>Latest Cosmos</th><th>Release</th></tr>' + ''.join(rows) + '</table>']
     write('latest/index.html', page('Latest release', '\n'.join(body)))
 
-def render_ow(index_root, ow, releases, latest_by_ow):
+def render_ow(ow, releases, latest_by_ow):
     rels = [r for r in releases if r['ow'] == ow]
     rels.sort(key=lambda r: (vkey(r['co']), r['id']), reverse=True)
     rows = []
     for r in rels:
-        is_latest = latest_of(r, ow, latest_by_ow)
-        href = f"{h(r['co'])}/files/" if is_latest else None
-        link = f'<a href="{href}">download</a>' if href else '<span class="muted">history</span>'
+        is_latest = (latest_by_ow.get(ow) or {}).get('id') == r['id']
+        link = f'<a href="{h(r["co"])}/files/">download</a>' if is_latest else '<span class="muted">history</span>'
         flag = '<span class="tag latest-tag">latest</span>' if is_latest else ('<span class="tag pre-tag">pre</span>' if r['pre'] else '')
         rows.append(f'<tr><td>Cosmos <b>{h(r["co"])}</b> {flag}</td><td>{h(r["name"])}</td><td>{link}</td></tr>')
     body = [nav([(ow, None)]), f'<h1>OpenWrt {h(ow)}</h1>',
             '<table><tr><th>Cosmos version</th><th>Release</th><th>Files</th></tr>' + ''.join(rows) + '</table>']
     write(f'{ow}/index.html', page(f'OpenWrt {ow}', '\n'.join(body)))
 
-def render_cosmos(index_root, ow, co, rels):
-    # rels: list of release dicts for this (ow, co), newest first
+def render_cosmos(ow, co, rels):
     if not rels: return
     latest = rels[0]
     rows = []
     for r in rels:
         is_latest = r['id'] == latest['id']
-        link = f"files/" if is_latest else None
         d = datetime.fromisoformat(r['published'].replace('Z','+00:00'))
+        link = '<a href="files/" class="link">download</a>' if is_latest else '<span class="muted">history</span>'
         rows.append(f'<tr><td><a href="{h(r["tag"])}/">{h(r["tag"])}</a></td>'
                     f'<td class="muted">{d.strftime("%Y-%m-%d")}</td>'
-                    f'<td>{r["n"]} files</td>'
-                    f'<td>{"<a href=\"files/\" class=\"link\">download</a>" if link else "<span class=\"muted\">history</span>"}</td></tr>')
+                    f'<td>{r["n"]} files</td><td>{link}</td></tr>')
     body = [nav([(ow, f"../{ow}/index.html"), (co, None)]),
             f'<h1>Cosmos {h(co)} <span class="muted">· OpenWrt {h(ow)}</span></h1>',
-            f'<table><tr><th>Tag</th><th>Published</th><th>Files</th><th></th></tr>' + ''.join(rows) + '</table>']
+            '<table><tr><th>Tag</th><th>Published</th><th>Files</th><th></th></tr>' + ''.join(rows) + '</table>']
     write(f'{ow}/{co}/index.html', page(f'Cosmos {co} — OpenWrt {ow}', '\n'.join(body)))
 
-def render_files(index_root, ow, co, rels, latest_all, latest_by_ow):
+def render_files(ow, co, rels, latest_all, latest_by_ow):
     if not rels: return
     latest = rels[0]
     flags = []
     if latest_all and latest['id'] == latest_all['id']:
         flags.append('<span class="tag latest-tag">latest overall</span>')
-    lat_ow = latest_by_ow.get(ow)
-    if lat_ow and latest['id'] == lat_ow['id']:
+    if (latest_by_ow.get(ow) or {}).get('id') == latest['id']:
         flags.append('<span class="tag latest-tag">latest</span>')
     if latest['pre']:
         flags.append('<span class="tag pre-tag">pre-release</span>')
     rows = []
-    for f in sorted(latest['files'], key=size_sort_key):
-        if f['checksum']:
-            rows.append(f'<tr><td class="checksum">{h(f["sha256"])}</td></tr>')
+    for f in sorted(latest['files'], key=lambda f: size_sort_key(f['name'])):
         rows.append(f'<tr><td><a href="{h(f["url"])}" download>{h(f["name"])}</a></td><td class="size">{h(f["size"])}</td></tr>')
     body = [nav([(ow, f"../{ow}/index.html"), (co, f"../{co}/index.html"), ('files', None)]),
             f'<h1>📥 Files — Cosmos {h(co)} · OpenWrt {h(ow)}</h1>',
@@ -230,19 +211,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--source', default='aseracorp/cosmos-owrt-releases')
     ap.add_argument('--root', default='.')
-    ap.add_argument('--token', default='', help='GitHub token for higher rate limits / private repos')
-    ap.add_argument('--include-pre', action='store_true', help='include pre-releases in "latest" selection')
+    ap.add_argument('--token', default='')
     args = ap.parse_args()
     ROOT = os.path.abspath(args.root)
     os.makedirs(ROOT, exist_ok=True)
     headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'cosmos-owrt-releases-generator'}
     if args.token: headers['Authorization'] = f'token {args.token}'
 
-    api = f'https://api.github.com/repos/{args.source}/releases'
     releases = []
     page = 1
     while True:
-        batch = api_get(f'{api}?per_page=100&page={page}', headers)
+        batch = api_get(f'https://api.github.com/repos/{args.source}/releases?per_page=100&page={page}', headers)
         if not batch: break
         releases.extend(batch)
         if len(batch) < 100: break
@@ -260,19 +239,15 @@ def main():
         assets = []
         for a in rel.get('assets', []):
             if a.get('state') != 'uploaded': continue
-            sha = ''
-            if a['name'].lower().endswith('.sha256') or a['name'].endswith('.sig'):
-                sha = a['name'].rsplit('.', 1)[0] if a['name'].lower().endswith('.sha256') else ''
             assets.append({
-                'name': a['name'], 'size': human(a.get('size',0)), 'size_b': a.get('size',0),
-                'url': a['browser_download_url'], 'sha256': sha})
+                'name': a['name'], 'size': human(a.get('size',0)),
+                'url': a['browser_download_url']})
         data.append({
             'id': rel['id'], 'tag': rel['tag_name'], 'name': rel['name'] or rel['tag_name'],
             'published': rel['published_at'], 'ow': ow, 'co': co, 'pre': rel.get('prerelease', False),
             'files': assets, 'n': len(assets)})
-    data.sort(key=lambda r: (vkey(r['co']), r['id']), reverse=True)
 
-    # latest overall = newest cosmos; skip pre-releases unless asked
+    # determine "latest" (newest cosmos version)
     cand = [r for r in data if not r['pre']] or data
     latest_all = max(cand, key=lambda r: (vkey(r['co']), r['id']))
     latest_by_ow = {}
@@ -282,20 +257,15 @@ def main():
             latest_by_ow[r['ow']] = r
 
     print(f'{len(data)} releases parsed')
-    # clean stale generated files (files that no longer exist)
-    for dirpath, dirnames, filenames in os.walk(ROOT):
-        for fn in filenames:
-            if fn.endswith('.html') and fn != 'index.html':  # legacy nested pages? keep simple: remove all html except root index
-                pass
     render_root(data, latest_all, latest_by_ow)
-    render_latest_root(latest_all, latest_by_ow, data)
+    render_latest_root(latest_all, latest_by_ow)
     for ow in sorted({r['ow'] for r in data if r['ow']}):
         ow_rel = [r for r in data if r['ow'] == ow]
-        render_ow(ROOT, ow, ow_rel, latest_by_ow)
+        render_ow(ow, ow_rel, latest_by_ow)
         for co in sorted({r['co'] for r in ow_rel}, key=vkey, reverse=True):
             combo = [r for r in ow_rel if r['co'] == co]
-            render_cosmos(ROOT, ow, co, combo)
-            render_files(ROOT, ow, co, combo, latest_all, latest_by_ow)
+            render_cosmos(ow, co, combo)
+            render_files(ow, co, combo, latest_all, latest_by_ow)
     print('done.')
 
 if __name__ == '__main__':
