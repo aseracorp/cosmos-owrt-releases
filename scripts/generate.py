@@ -197,7 +197,10 @@ def render_latest_root(latest_all, latest_by_ow):
             '<h1>📌 Latest</h1>',
             f'<p class="muted">Latest Cosmos Cloud overall: <b>{h(latest_all["co"])}</b> / OpenWrt <b>{h(latest_all["ow"])}</b> — '
             f'<a href="{abspath(latest_all["ow"], latest_all["co"])}/index.html">open downloads</a></p>',
-            '<h2>Per OpenWrt version</h2><table><tr><th>OpenWrt</th><th>Latest Cosmos Cloud</th><th>Release</th></tr>' + ''.join(rows) + '</table>']
+            '<h2>Per OpenWrt version</h2><table><tr><th>OpenWrt</th><th>Latest Cosmos Cloud</th><th>Release</th></tr>' + ''.join(rows) + '</table>',
+            f'<h2>Files — {h(latest_all["co"])} · {h(latest_all["ow"])}</h2>',
+            file_table(latest_all),
+            f'<p class="back"><a href="{A("index.html")}">← back</a></p>']
     write('latest/index.html', page('Latest release', '\n'.join(body)))
 
 def render_ow(ow, releases, latest_by_ow):
