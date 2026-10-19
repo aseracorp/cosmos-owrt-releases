@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://aseracorp.github.io/cosmos-owrt-releases/sitemap.xml
