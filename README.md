@@ -1,6 +1,6 @@
-# Cosmos Cloud — OpenWrt releases
+# Cosmos Cloud OpenWrt
 
-Public download index for Cosmos Cloud OpenWrt images.
+Public download index for **Cosmos Cloud OpenWrt** images.
 
 **Note:** This repository contains **no binary files**. It is an automatically generated download index (GitHub Pages).
 
@@ -11,18 +11,18 @@ Public download index for Cosmos Cloud OpenWrt images.
 ## Site
 
 - Site: <https://aseracorp.github.io/cosmos-owrt-releases/>
-- Auto-links: `latest/` (latest Cosmos overall) and `latest/<openwrt>` (per OpenWrt version).
-- Only the **latest** release of each Cosmos/OpenWrt combo gets download links; older files are listed without links.
+- Auto-links: `latest/` (latest Cosmos Cloud overall) and `latest/<openwrt>` (per OpenWrt version).
+- Only the **latest** release of each Cosmos Cloud/OpenWrt combo gets download links; older files are listed without links.
 
 ## Structure
 
 ```
 <openwrt>/            e.g. 25.12.5  (OpenWrt version)
-  <cosmos>/           e.g. v0.23.4   (Cosmos version, dir name from release name)
+  <cosmos>/           e.g. v0.23.4   (Cosmos Cloud version, dir name from release name)
     files             download links (latest release of that combo only)
-latest/               latest Cosmos overall (auto-updating)
+latest/               latest Cosmos Cloud overall (auto-updating)
   <openwrt>/…/files
-latest/<openwrt>/      latest Cosmos for each OpenWrt (auto-updating)
+latest/<openwrt>/      latest Cosmos Cloud for each OpenWrt (auto-updating)
 ```
 
 ## For maintainers
